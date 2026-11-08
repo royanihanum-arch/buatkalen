@@ -1,3 +1,5 @@
+const isProd = process.env.NODE_ENV === 'production'
+
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com",
@@ -9,17 +11,21 @@ const csp = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'self'",
-  'upgrade-insecure-requests',
+  ...(isProd ? ["frame-ancestors 'self'", 'upgrade-insecure-requests'] : []),
 ].join('; ')
 
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
-  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+  // Framing/isolation headers only in production so the v0 preview iframe can render the app.
+  ...(isProd
+    ? [
+        { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+        { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+      ]
+    : []),
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
   {

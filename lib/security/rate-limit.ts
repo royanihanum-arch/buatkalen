@@ -39,6 +39,8 @@ export function clientKey(headers: Headers, scope: string): string {
 export function isSameOrigin(headers: Headers): boolean {
   const site = headers.get('sec-fetch-site')
   if (site && site !== 'same-origin' && site !== 'none') return false
+  // Browser-asserted same-origin is authoritative; proxies (like the v0 preview) may rewrite Host.
+  if (site === 'same-origin') return true
   const origin = headers.get('origin')
   const host = headers.get('x-forwarded-host') ?? headers.get('host')
   if (origin && host) {

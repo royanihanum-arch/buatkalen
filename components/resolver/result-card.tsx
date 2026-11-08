@@ -19,7 +19,16 @@ const PROVIDER_LABEL: Record<string, string> = {
   gate: 'Countdown / verification gate',
 }
 
-export function ResultCard({ result, onRetry }: { result: PublicResult; onRetry: () => void }) {
+export function ResultCard({
+  result,
+  onRetry,
+  onResolveUrl,
+}: {
+  result: PublicResult
+  onRetry: () => void
+  onResolveUrl: (url: string) => void
+}) {
+  const [finalLink, setFinalLink] = useState('')
   const [copied, setCopied] = useState(false)
   const [visited, setVisited] = useState(false)
   const copyTarget = result.directUrl ?? (result.downloadUrl ? new URL(result.downloadUrl, location.origin).toString() : '')
@@ -95,12 +104,42 @@ export function ResultCard({ result, onRetry }: { result: PublicResult; onRetry:
                 {"i've verified — retry"}
               </button>
             </div>
+            <form
+              className="flex items-center gap-2 rounded-full border border-white/15 bg-black/30 p-1.5 pl-4 focus-within:ring-1 focus-within:ring-white/30"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const value = finalLink.trim()
+                if (/^https?:\/\//i.test(value)) onResolveUrl(value)
+              }}
+            >
+              <label htmlFor="final-link" className="sr-only">
+                Paste the link you reached after verification
+              </label>
+              <input
+                id="final-link"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="paste the link you landed on…"
+                value={finalLink}
+                onChange={(e) => setFinalLink(e.target.value)}
+                className="h-10 min-w-0 flex-1 bg-transparent text-[15px] text-white outline-none placeholder:text-white/35"
+              />
+              <button
+                type="submit"
+                disabled={!finalLink.trim()}
+                className="flex h-10 shrink-0 items-center rounded-full bg-white px-4 text-[14px] font-medium text-black transition-transform hover:scale-[1.03] disabled:opacity-40"
+              >
+                unwrap
+              </button>
+            </form>
           </div>
         ) : null}
 
         {result.status === 'error' ? <p className="text-[16px] leading-relaxed text-white/80">{result.message}</p> : null}
 
-        {result.steps.length ? (
+        {result.steps?.length ? (
           <details className="group">
             <summary className="cursor-pointer list-none font-mono text-[11px] uppercase tracking-[0.2em] text-white/45 hover:text-white/70">
               <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">

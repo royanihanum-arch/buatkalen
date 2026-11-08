@@ -3,6 +3,7 @@ import { BlockedError, CookieJar, assertSafeUrl, readText, safeFetch } from '@/l
 import { sealTicket } from '@/lib/security/token'
 import { absolute, decodeMaybeBase64Url, detectCaptcha, filenameFromDisposition, findInPageRedirect, load } from './html'
 import { findHost, HOSTS } from './hosts'
+import { AD_GATE_HOSTS, tryAdLinkFly } from './adgate'
 import type { PublicResult, ResolveContext, ResolverOutcome } from './types'
 
 const WRAPPER_PARAMS = ['url', 'u', 'link', 'target', 'dest', 'destination', 'redirect', 'redirect_url', 'redir', 'r', 'go', 'to', 'out', 'href', 'continue', 'next', 'file', 'q']
@@ -39,6 +40,24 @@ async function genericLayer(url: URL, ctx: ResolveContext): Promise<ResolverOutc
   })
   const final = new URL(finalUrl)
   if (final.toString() !== url.toString() && findHost(final)) return { kind: 'next', url: finalUrl }
+
+  const isAdGate = AD_GATE_HOSTS.test(final.hostname) || AD_GATE_HOSTS.test(url.hostname)
+  const shielded =
+    res.headers.has('cf-ray') || res.headers.has('cf-mitigated') || /cloudflare|ddos-guard|sucuri/i.test(res.headers.get('server') ?? '')
+  if (res.status === 403 || res.status === 503 || res.status === 429) {
+    await res.body?.cancel().catch(() => {})
+    if (shielded || isAdGate) {
+      ctx.log(`HTTP ${res.status} · ${final.hostname} is shielded by an anti-bot challenge`)
+      return {
+        kind: 'captcha',
+        host: final.hostname,
+        provider: isAdGate ? 'gate' : 'cloudflare',
+        pageUrl: finalUrl,
+        hint: `${final.hostname} blocks automated servers. Open it, pass the check and countdown, then paste the final link below — it will be unwrapped automatically.`,
+      }
+    }
+    return { kind: 'error', host: final.hostname, message: `${final.hostname} refused the request (HTTP ${res.status})` }
+  }
 
   const type = res.headers.get('content-type') ?? ''
   const disposition = res.headers.get('content-disposition')
@@ -79,6 +98,9 @@ async function genericLayer(url: URL, ctx: ResolveContext): Promise<ResolverOutc
     return { kind: 'next', url: hostLinks[0] }
   }
 
+  const adlinkfly = await tryAdLinkFly(html, finalUrl, ctx).catch(() => null)
+  if (adlinkfly) return { kind: 'next', url: adlinkfly }
+
   const captcha = detectCaptcha(html)
   if (captcha) {
     return {
@@ -99,6 +121,16 @@ async function genericLayer(url: URL, ctx: ResolveContext): Promise<ResolverOutc
       provider: 'gate',
       pageUrl: finalUrl,
       hint: `${final.hostname} uses a timed ad-gate that must be completed in a real browser.`,
+    }
+  }
+
+  if (isAdGate) {
+    return {
+      kind: 'captcha',
+      host: final.hostname,
+      provider: 'gate',
+      pageUrl: finalUrl,
+      hint: `${final.hostname} hides its destination behind a browser-only ad gate. Complete it, then paste the final link below.`,
     }
   }
 

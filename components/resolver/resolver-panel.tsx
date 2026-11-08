@@ -71,7 +71,17 @@ export function ResolverPanel() {
       </form>
 
       <div aria-live="polite" className="w-full">
-        {data ? <ResultCard result={data} onRetry={submit} /> : null}
+        {data ? (
+          <ResultCard
+            key={data.pageUrl ?? data.downloadUrl ?? data.host}
+            result={data}
+            onRetry={submit}
+            onResolveUrl={(next) => {
+              setUrl(next)
+              trigger(next)
+            }}
+          />
+        ) : null}
       </div>
 
       {!data && !isMutating ? (
